@@ -1,0 +1,258 @@
+---
+title: "Report"
+author: "Yue Li, Suofei Feng"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(fda.drug.stats290)
+```
+
+# Introduction
+
+The FDA offers a trove of valuable data through their Open FDA website. However, 
+the API can often be tedious and difficult to navigate. This package provides 
+researchers with a fast and easy way to grab the API data and avoid overhead. More 
+information about the Open FDA initiative can be found here, on their [site](open.fda.gov).
+This package provides users with an easy option to gather data using parametrized queries
+and reshape the data for easier use. We also provide functions for plotting/graphing 
+and gathering summary values. We came across a few road blocks while working on this
+project. There were a 
+
+This document introduces you to fda.drug.stats290's basic  set of tools and shows 
+you how to apply them in different ways.
+
+# Use cases
+
+A user may want to explore a subset of serious reactions to drugs. First, we can
+try to understand the summary of what might be going on. Perhaps we can first understand
+when serious reactions to drugs would occur, and what kinds of drugs they might be.
+
+```{r}
+count_events("receivedate")
+visualize_events("receivedate")
+
+visualize_events("patient.drug.openfda.generic_name")
+```
+
+Once we understand the brief summary of what is going on, we can dig into the
+data.
+
+```{r}
+t_1 <- fda_api_table(serious = 1, limit = 50)
+```
+
+Using `t_1`, we can do a few things:
+
+```{r}
+t_1_df <- fda_dataframe(t_1) #get a data frame from t_1 without openfda and drug data
+head(t_1_df)
+```
+
+```{r}
+t_1_drug <- fda_drug_dataframe(t_1) #get a data frame from t_1 for drug without openfda data
+head(t_1_drug)
+```
+
+```{r}
+openfda_t_1 <- get_openfda(t_1)
+summary(openfda_t_1$`1`) #show the openfda data of the patient with ID = 1
+```
+
+```{r}
+manufact_count <- openfda_count("manufacturer_name", openfda_t_1)
+head(manufact_count)
+```
+Visualize the top reactions of the top 3 most frequent activesubstance names:
+```{r}
+top_react <- view_top_react(t_1_df, t_1_drug, top_name = 3, top_react = 8)
+head(top_react)
+```
+
+
+# Contributions
+
+Yue contributed to the functions visualize_events, count_events, and fda_api_table,
+as well as gathering the dataset and creating the documentation for the report.
+
+Suofei created the functions fda_dataframe, fda_drug_dataframe, get_openfda, 
+openfda_count, and view_top_react.
+
+# Additional information and ways to use the functions
+
+In order to familiarize yourself with the dataset, please read the 
+[variable documentation](https://open.fda.gov/apis/drug/event/searchable-fields). 
+This will be useful for understanding the values of the many variables that FDA provides, 
+and will be necessary for providing search filters and count queries.
+
+## Data: drug_events
+
+This is a static dataset pulled from Q1 of 2018 (part 1), which contains over 
+12,000 instances of adverse drug events. This is a way for researchers to play 
+with and understand the basic structure of the FDA dataset. This dataset will
+not be updated, so in general, we recommend using the fda_api_table function
+to obtain your dataset. 
+
+## fda_api_table
+
+This is a function that allows people to return tables from the FDA API. The 
+structure of this dataset is similar to the static dataset stored in drug_events.
+It primarily provides a person with the ability to set a start and end date. 
+Further, we provide assistance with declaring some filter variables. 
+
+
+The function allows you to filter based on a few key features which are listed in
+more detail on the help page. Because the FDA dataset is so vast and large, we
+limited the search to the key features. In the future, we can consider expanding
+the filter to include all of the variables. However, in this case, to provide
+ease of use, we felt that restricting the filter to certain key words would be enough.
+
+```{r}
+t_1 <- fda_api_table()
+  
+t_2 <- 
+  fda_api_table(
+    limit = 100, 
+    start_date = "2016-01-01", 
+    end_date = "2018-01-01",
+    serious = 1,
+    generic_name  = "asprin"
+  )
+```
+
+
+This package also provides the ability to pass in your API key. The API key
+allows you to obtain more requests per day than just your IP address. To learn
+about the API key, look at their [authentication page](https://open.fda.gov/apis/authentication/).
+In this case, you are able to pass in your authentication key simply by passing
+in your key in the api_key field.
+
+```{r, eval=FALSE}
+t <- count_events("receivedate", api_key = "YOUR API KEY HERE")
+```
+
+
+## count_events and visualize_events
+
+One useful way to also look at the FDA data is to count the total value of certain
+events using the function count_events.
+
+```{r}
+count_events("receivedate")
+
+count_events(
+  "receivedate", 
+  limit = 100,
+  start_date = "2016-01-01",
+  end_date = "2018-01-01",
+  serious = 1,
+  generic_name  = "asprin"
+)
+```
+
+For the function visualize_events, we build on top of the count_events function
+and create visualizations from the FDA dataset. Because many of the result returns
+thousands of values, which will be impossible to graph, we recommend users to limit
+the number of values to the top 20 and set a hard limit at 50 values, unless the
+variable is a continuous variable like time. 
+
+```{r}
+# visualize all patient weight events
+visualize_events("patient.patientweight")
+# visualize receivedates where patientsex was male and was submitted by a pharmacist
+visualize_events("receivedate", patientsex = 1, qualification = 2)
+# visualize by gender (0 = unknown, 1 = male, 2 = female)
+visualize_events("patient.patientsex")
+# visualize by top 30 patient reactions
+visualize_events("patient.reaction.reactionmeddrapt.exact", limit = 30)
+```
+
+
+## fda_dataframe and fda_drug_dataframe
+
+One challenge of the fda_api_table that is called is that many of the values are
+deeply nested inside of one another. For example, to find openfda data, one 
+needs to go from fda_api_table's surface, to patient level, and to drug level 
+under patient. Then one can see openfda as data frames, whose entries are 
+lists. The functions, fda_dataframe, and fda_drug_dataframe help flatten the 
+tables returned by fda_api_table (or the in-built data set). The reason we 
+separate the general data frame for patient information and the drug data 
+frame for the patient is that, if we combine the two data frames, due to the 
+large number of levels of the data nesting, there will be large quantities of 
+data replication inside one data frame, which will make the data frame 
+difficult to read.
+```{r}
+t_2_df <- fda_dataframe(t_2)
+head(t_2_df)
+```
+
+```{r}
+t_2_drug <- fda_drug_dataframe(t_2)
+head(t_2_drug)
+```
+
+In case the user wants to combine the information from the two data frames, 
+same objects returned by fda_api_table should be fed into the two functions.
+
+##get_openfda and openfda_count
+As the openfda data dwells as separate data frames of data frames at a deeper 
+level than drug information, it is more efficient to extract them into a list 
+with a function get_openfda:
+```{r}
+openfda_data <- get_openfda(t_2)
+summary(openfda_data$`2`) #show the summary of openfda data of the patient with ID=2
+openfda_data_small <- get_openfda(t_2, id = 2) #user can specify whose openfda data is needed using the argument id
+summary(openfda_data_small)
+```
+
+An application of the output of get_openfda is to get the counts of a 
+specified term by calling openfda_count. The output is a data frame. There are
+two required arguments: var_name, which specifies the term (must be
+meaningful, one of ("generic_name", "brand_name", "manufacturer_name", 
+"substance_name", "product_type", "route")); openfda_data, which is returned 
+by get_openfda.
+
+```{r}
+brand_count <- openfda_count("brand_name", openfda_data)
+head(brand_count)
+```
+
+A possible application of the output of this openfda_count would be Word 
+Cloud. For example, with proper parameters, the frequencies of each brand name
+can be easily visualized by Word Cloud using the package wordcloud and seeing 
+what the most frequently used term is.
+
+```{r, eval = FALSE}
+library(wordcloud)
+
+wordcloud(words = brand_count$word, freq = brand_count$count, scale = c(1, .2), min.freq = 10, max.words=50,random.order=FALSE, random.color = FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"), fixed.asp = TRUE)
+```
+
+##view_top_react
+With the shared ID when producing fda_dataframe and fda_drug_dataframe using 
+the same fda_api_table object, the user can combine the two data frames to get
+some insights. view_top_react is an example which returns a data frame with 
+activesubstance from fda_drug_dataframe object, and its corresponding patient
+reaction from fda_dataframe object. It also automatically shows histograms of
+the counts of reactions for each activesubstance. The number of 
+activesubstance names for display, and the number of reactions to be shown 
+explicitly (not in "others"), can be specified with arguments top_name 
+(activesubstance, default = 5) and top_react (reaction, default = 8).
+
+```{r}
+subs_reaction <- view_top_react(t_2_df, t_2_drug, top_name = 6, top_react = 10)
+```
+
+```{r}
+head(subs_reaction)
+```
+
